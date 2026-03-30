@@ -1,0 +1,44 @@
+{
+  "name": "subdot",
+  "version": "1.0.0",
+  "description": "Minimal in-browser pub/sub bus with wildcard subjects (*, >) and request/reply with timeout. NATS style messaging, zero dependencies.",
+  "main": "./cjs/browser-bus.js",
+  "module": "./esm/browser-bus.js",
+  "types": "./lib/browser-bus.d.ts",
+  "exports": {
+    "types": "./lib/browser-bus.d.ts",
+    "require": "./cjs/browser-bus.js",
+    "import": "./esm/browser-bus.js"
+  },
+  "files": [
+    "cjs/",
+    "esm/",
+    "lib/"
+  ],
+  "scripts": {
+    "clean": "rm -rf cjs esm lib",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly",
+    "build": "npm run clean && npm run build:cjs && npm run build:esm && npm run build:types",
+    "test": "npm run build && ava --verbose -T 10000"
+  },
+  "ava": {
+    "failFast": true,
+    "files": [
+      "./test/**/*.js"
+    ]
+  },
+  "keywords": [
+    "pubsub",
+    "bus",
+    "nats",
+    "wildcard",
+    "request-reply",
+    "browser"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

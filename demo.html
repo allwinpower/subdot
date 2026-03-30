@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>subdot — demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f1117; color: #e0e0e0; padding: 24px; }
+  h1 { font-size: 1.4rem; margin-bottom: 20px; color: #fff; }
+  h1 span { color: #888; font-weight: 400; font-size: 0.85rem; }
+
+  .panels { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .panel { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 16px; }
+  .panel h2 { font-size: 0.95rem; margin-bottom: 12px; color: #a0a8c0; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  label { display: block; font-size: 0.8rem; color: #888; margin-bottom: 4px; }
+  input, textarea { width: 100%; padding: 8px 10px; background: #12141c; border: 1px solid #2a2d3a; border-radius: 4px; color: #e0e0e0; font-family: monospace; font-size: 0.85rem; margin-bottom: 10px; }
+  textarea { resize: vertical; min-height: 60px; }
+  input:focus, textarea:focus { outline: none; border-color: #4a6cf7; }
+
+  button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; font-weight: 500; }
+  .btn-primary { background: #4a6cf7; color: #fff; }
+  .btn-primary:hover { background: #5b7af8; }
+  .btn-danger { background: #e5484d; color: #fff; font-size: 0.75rem; padding: 4px 10px; }
+  .btn-danger:hover { background: #f06; }
+
+  .sub-list { margin-top: 10px; }
+  .sub-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #12141c; border-radius: 4px; margin-bottom: 4px; font-family: monospace; font-size: 0.82rem; }
+  .sub-item .pattern { color: #7cc5f2; }
+
+  .log-section { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 8px; padding: 16px; }
+  .log-section h2 { font-size: 0.95rem; margin-bottom: 10px; color: #a0a8c0; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; align-items: center; }
+  .log-section h2 button { background: transparent; color: #666; border: 1px solid #2a2d3a; font-size: 0.75rem; }
+  .log-section h2 button:hover { color: #e0e0e0; }
+
+  #log { height: 240px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; line-height: 1.6; padding: 8px; background: #12141c; border-radius: 4px; }
+  .log-line { white-space: pre-wrap; word-break: break-all; }
+  .log-time { color: #555; }
+  .log-sub { color: #30a46c; }
+  .log-unsub { color: #e5484d; }
+  .log-pub { color: #4a6cf7; }
+  .log-recv { color: #7cc5f2; }
+  .log-req { color: #e5a51b; }
+  .log-res { color: #30a46c; }
+  .log-err { color: #e5484d; }
+
+  @media (max-width: 800px) { .panels { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<h1>subdot <span>— interactive demo</span></h1>
+
+<div class="panels">
+  <!-- Subscribe -->
+  <div class="panel">
+    <h2>Subscribe</h2>
+    <label for="sub-pattern">Pattern</label>
+    <input id="sub-pattern" type="text" placeholder="orders.*  or  events.>" value="orders.*">
+    <button class="btn-primary" id="btn-sub">Subscribe</button>
+    <div class="sub-list" id="sub-list"></div>
+  </div>
+
+  <!-- Publish -->
+  <div class="panel">
+    <h2>Publish</h2>
+    <label for="pub-subject">Subject</label>
+    <input id="pub-subject" type="text" placeholder="orders.created" value="orders.created">
+    <label for="pub-data">Data (JSON)</label>
+    <textarea id="pub-data">{ "id": 123, "item": "widget" }</textarea>
+    <button class="btn-primary" id="btn-pub">Publish</button>
+  </div>
+
+  <!-- Request -->
+  <div class="panel">
+    <h2>Request / Reply</h2>
+    <label for="req-subject">Subject</label>
+    <input id="req-subject" type="text" placeholder="user.get" value="user.get">
+    <label for="req-data">Data (JSON)</label>
+    <textarea id="req-data">{ "id": 42 }</textarea>
+    <label for="req-timeout">Timeout (ms)</label>
+    <input id="req-timeout" type="number" value="1000" min="100" step="100">
+    <button class="btn-primary" id="btn-req">Send Request</button>
+  </div>
+</div>
+
+<!-- Event log -->
+<div class="log-section">
+  <h2>Event Log <button id="btn-clear">Clear</button></h2>
+  <div id="log"></div>
+</div>
+
+<script type="module">
+  import { createBus } from './esm/browser-bus.js';
+
+  const bus = createBus();
+  const subs = new Map(); // id -> { pattern, unsub }
+  let subId = 0;
+
+  const $ = (id) => document.getElementById(id);
+  const logEl = $('log');
+  const subListEl = $('sub-list');
+
+  function timestamp() {
+    return new Date().toLocaleTimeString('en-GB', { hour12: false });
+  }
+
+  function log(tag, cssClass, text) {
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.innerHTML = `<span class="log-time">${timestamp()}</span> <span class="${cssClass}">[${tag}]</span> ${escapeHtml(text)}`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function parseJson(str) {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return str;
+    }
+  }
+
+  function renderSubs() {
+    subListEl.innerHTML = '';
+    for (const [id, sub] of subs) {
+      const el = document.createElement('div');
+      el.className = 'sub-item';
+      el.innerHTML = `<span class="pattern">${escapeHtml(sub.pattern)}</span>`;
+      const btn = document.createElement('button');
+      btn.className = 'btn-danger';
+      btn.textContent = 'Unsub';
+      btn.onclick = () => {
+        sub.unsub();
+        subs.delete(id);
+        log('UNSUB', 'log-unsub', sub.pattern);
+        renderSubs();
+      };
+      el.appendChild(btn);
+      subListEl.appendChild(el);
+    }
+  }
+
+  // Subscribe
+  $('btn-sub').onclick = () => {
+    const pattern = $('sub-pattern').value.trim();
+    if (!pattern) return;
+
+    const id = ++subId;
+    const unsub = bus.subscribe(pattern, (msg) => {
+      log('RECV', 'log-recv', `${pattern} matched ${msg.subject} → ${JSON.stringify(msg.data)}`);
+      return msg.data; // echo back for request/reply
+    });
+
+    subs.set(id, { pattern, unsub });
+    log('SUB', 'log-sub', pattern);
+    renderSubs();
+  };
+
+  // Publish
+  $('btn-pub').onclick = () => {
+    const subject = $('pub-subject').value.trim();
+    const data = parseJson($('pub-data').value.trim());
+    if (!subject) return;
+
+    bus.publish(subject, data);
+    log('PUB', 'log-pub', `${subject} → ${JSON.stringify(data)}`);
+  };
+
+  // Request
+  $('btn-req').onclick = async () => {
+    const subject = $('req-subject').value.trim();
+    const data = parseJson($('req-data').value.trim());
+    const timeout = parseInt($('req-timeout').value) || 1000;
+    if (!subject) return;
+
+    log('REQ', 'log-req', `${subject} → ${JSON.stringify(data)}  (timeout: ${timeout}ms)`);
+
+    try {
+      const result = await bus.request(subject, data, { timeout });
+      log('RES', 'log-res', `${subject} ← ${JSON.stringify(result)}`);
+    } catch (err) {
+      log('ERR', 'log-err', err.message);
+    }
+  };
+
+  // Clear log
+  $('btn-clear').onclick = () => { logEl.innerHTML = ''; };
+
+  log('SUB', 'log-sub', 'Ready — subscribe to a pattern, then publish or request.');
+</script>
+
+</body>
+</html>

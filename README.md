@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/allwinpower/subdot/main/assets/logo/subdot-logo-wordmark.png" alt="subdot — in-browser subject bus" width="480" />
+</p>
+
 # subdot
 
 Minimal in-browser pub/sub bus with wildcard subjects (`*`, `>`) and request/reply with timeout.
@@ -476,6 +480,25 @@ Possible future additions:
 - collect-all request mode
 - package publishing
 - tests
+
+## interactive demo
+
+A self-contained `demo.html` is included. It lets you subscribe, publish, and send requests in the browser with a live event log.
+
+```bash
+npm run build
+npx serve .
+```
+
+Then open the printed URL in your browser.
+
+The demo has three panels:
+
+- **Subscribe** — register patterns like `orders.*` or `events.>`, with an unsub button per subscription
+- **Publish** — send a message to any subject with a JSON payload
+- **Request / Reply** — send a request and see the response (or timeout error) in the log
+
+All activity shows in the **Event Log** at the bottom with color-coded tags: `[SUB]`, `[PUB]`, `[RECV]`, `[REQ]`, `[RES]`, `[ERR]`.
 
 ## license
 
